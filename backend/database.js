@@ -1,28 +1,54 @@
-const Database = require('better-sqlite3');
-const path = require('path');
+const initSqlJs = require('sql.js');
 
-const dbPath = path.resolve(__dirname, 'orders.db');
-const db = new Database(dbPath);
+let db = null;
 
-console.log('Connected to the better-sqlite3 database.');
+// Initialize the database (async)
+async function initDatabase() {
+  if (db) return db;
 
-// Create table synchronously
-db.exec(`CREATE TABLE IF NOT EXISTS orders (
+  const SQL = await initSqlJs();
+  db = new SQL.Database();
+
+  // Create orders table
+  db.run(`CREATE TABLE IF NOT EXISTS orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     customerName TEXT NOT NULL,
     items TEXT NOT NULL,
     status TEXT NOT NULL,
     category TEXT DEFAULT 'Veg',
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-)`);
+  )`);
 
-// Ensure category column exists (ALTER TABLE handles this)
-try {
-    db.exec(`ALTER TABLE orders ADD COLUMN category TEXT DEFAULT 'Veg'`);
-} catch (err) {
-    // Column likely already exists
+  console.log('SQLite (sql.js) database initialized.');
+  return db;
 }
 
-console.log('Orders table ready.');
+// Helper: run a query and return all rows as objects
+function queryAll(database, sql, params = []) {
+  const stmt = database.prepare(sql);
+  stmt.bind(params);
+  const rows = [];
+  while (stmt.step()) {
+    rows.push(stmt.getAsObject());
+  }
+  stmt.free();
+  return rows;
+}
 
-module.exports = db;
+// Helper: run a query and return the first row
+function queryGet(database, sql, params = []) {
+  const rows = queryAll(database, sql, params);
+  return rows[0] || null;
+}
+
+// Helper: run an INSERT/UPDATE/DELETE, return lastInsertRowid
+function queryRun(database, sql, params = []) {
+  database.run(sql, params);
+  const result = database.exec('SELECT last_insert_rowid() as id');
+  if (result.length > 0 && result[0].values.length > 0) {
+    return result[0].values[0][0];
+  }
+  return null;
+}
+
+module.exports = { initDatabase, queryAll, queryGet, queryRun };
