@@ -17,10 +17,8 @@ const STATUS_FLOW = {
 
 // GET all orders
 app.get('/api/orders', (req, res) => {
-  db.all('SELECT * FROM orders ORDER BY createdAt DESC', [], (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
+  try {
+    const rows = db.prepare('SELECT * FROM orders ORDER BY createdAt DESC').all();
     
     // Parse items back to JSON
     const orders = rows.map(row => ({
@@ -29,7 +27,9 @@ app.get('/api/orders', (req, res) => {
     }));
     
     res.json(orders);
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST a new order
@@ -43,21 +43,17 @@ app.post('/api/orders', (req, res) => {
   const orderCategory = category || 'Veg';
   const itemsJson = JSON.stringify(items);
 
-  const query = `INSERT INTO orders (customerName, items, status, category) VALUES (?, ?, ?, ?)`;
-  db.run(query, [customerName, itemsJson, status, orderCategory], function(err) {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
+  try {
+    const insert = db.prepare(`INSERT INTO orders (customerName, items, status, category) VALUES (?, ?, ?, ?)`);
+    const info = insert.run(customerName, itemsJson, status, orderCategory);
     
     // Fetch the newly created order
-    db.get(`SELECT * FROM orders WHERE id = ?`, [this.lastID], (err, row) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-      row.items = JSON.parse(row.items);
-      res.status(201).json(row);
-    });
-  });
+    const row = db.prepare(`SELECT * FROM orders WHERE id = ?`).get(info.lastInsertRowid);
+    row.items = JSON.parse(row.items);
+    res.status(201).json(row);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // PATCH update order status
@@ -65,10 +61,8 @@ app.patch('/api/orders/:id/status', (req, res) => {
   const { id } = req.params;
   const { newStatus } = req.body;
   
-  db.get(`SELECT status FROM orders WHERE id = ?`, [id], (err, row) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
+  try {
+    const row = db.prepare(`SELECT status FROM orders WHERE id = ?`).get(id);
     if (!row) {
       return res.status(404).json({ error: 'Order not found.' });
     }
@@ -86,18 +80,14 @@ app.patch('/api/orders/:id/status', (req, res) => {
       return res.status(400).json({ error: 'Order is already completed or cannot be updated further.' });
     }
 
-    db.run(`UPDATE orders SET status = ? WHERE id = ?`, [targetStatus, id], function(err) {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-      
-      db.get(`SELECT * FROM orders WHERE id = ?`, [id], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        row.items = JSON.parse(row.items);
-        res.json(row);
-      });
-    });
-  });
+    db.prepare(`UPDATE orders SET status = ? WHERE id = ?`).run(targetStatus, id);
+    
+    const updatedRow = db.prepare(`SELECT * FROM orders WHERE id = ?`).get(id);
+    updatedRow.items = JSON.parse(updatedRow.items);
+    res.json(updatedRow);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {

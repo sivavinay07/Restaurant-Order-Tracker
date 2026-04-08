@@ -1,31 +1,28 @@
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 const path = require('path');
 
 const dbPath = path.resolve(__dirname, 'orders.db');
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error opening database', err.message);
-  } else {
-    console.log('Connected to the SQLite database.');
-    db.run(`CREATE TABLE IF NOT EXISTS orders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        customerName TEXT NOT NULL,
-        items TEXT NOT NULL,
-        status TEXT NOT NULL,
-        category TEXT DEFAULT 'Veg',
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`, (err) => {
-        if (err) {
-            console.error('Error creating orders table', err.message);
-        } else {
-            console.log('Orders table ready.');
-            // Add category column if it doesn't exist (in case table already existed)
-            db.run(`ALTER TABLE orders ADD COLUMN category TEXT DEFAULT 'Veg'`, (err) => {
-                // Ignore error if column already exists
-            });
-        }
-    });
-  }
-});
+const db = new Database(dbPath);
+
+console.log('Connected to the better-sqlite3 database.');
+
+// Create table synchronously
+db.exec(`CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customerName TEXT NOT NULL,
+    items TEXT NOT NULL,
+    status TEXT NOT NULL,
+    category TEXT DEFAULT 'Veg',
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
+
+// Ensure category column exists (ALTER TABLE handles this)
+try {
+    db.exec(`ALTER TABLE orders ADD COLUMN category TEXT DEFAULT 'Veg'`);
+} catch (err) {
+    // Column likely already exists
+}
+
+console.log('Orders table ready.');
 
 module.exports = db;

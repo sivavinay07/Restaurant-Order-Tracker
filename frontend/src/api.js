@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL = 'https://restaurant-order-tracker-mv27.onrender.com/api';
 
 export const fetchOrders = async () => {
   const response = await axios.get(`${API_BASE_URL}/orders`);
