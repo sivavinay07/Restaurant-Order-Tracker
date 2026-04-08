@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, Search, UtensilsCrossed } from 'lucide-react';
 import { fetchOrders, createOrder, updateOrderStatus } from './api';
 import OrderCard from './components/OrderCard';
 import OrderForm from './components/OrderForm';
@@ -24,15 +24,14 @@ function App() {
 
   useEffect(() => {
     loadOrders();
-    // Optional polling could be added here
-    const interval = setInterval(loadOrders, 5000); // refresh every 5s
+    const interval = setInterval(loadOrders, 5000);
     return () => clearInterval(interval);
   }, []);
 
   const handleCreateOrder = async (orderData) => {
     try {
       const newOrder = await createOrder(orderData);
-      setOrders([newOrder, ...orders]);
+      setOrders(prev => [newOrder, ...prev]);
       setIsFormOpen(false);
     } catch (error) {
       console.error('Failed to create order', error);
@@ -43,42 +42,84 @@ function App() {
   const handleUpdateStatus = async (id) => {
     try {
       const updatedOrder = await updateOrderStatus(id);
-      setOrders(orders.map(order => 
-        order.id === updatedOrder.id ? updatedOrder : order
-      ));
+      setOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
     } catch (error) {
       console.error('Failed to update status', error);
       alert('Failed to update order status.');
     }
   };
 
-  // Filter orders by search term and category
   const filteredOrders = orders.filter(o => {
-    const matchesSearch = o.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          JSON.stringify(o.items).toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch =
+      o.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      JSON.stringify(o.items).toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = filterCategory === 'All' || o.category === filterCategory;
     return matchesSearch && matchesCategory;
   });
 
-  // Group orders by status
   const preparingOrders = filteredOrders.filter(o => o.status === 'Preparing');
-  const readyOrders = filteredOrders.filter(o => o.status === 'Ready');
+  const readyOrders     = filteredOrders.filter(o => o.status === 'Ready');
   const completedOrders = filteredOrders.filter(o => o.status === 'Completed');
+
+  const columns = [
+    {
+      key: 'preparing',
+      label: 'Preparing',
+      subtitle: 'Orders being cooked',
+      cls: 'col-preparing',
+      badgeCls: 'preparing',
+      icon: '🔥',
+      orders: preparingOrders,
+      emptyMsg: 'No orders in the kitchen',
+    },
+    {
+      key: 'ready',
+      label: 'Ready',
+      subtitle: 'Awaiting pickup',
+      cls: 'col-ready',
+      badgeCls: 'ready',
+      icon: '✅',
+      orders: readyOrders,
+      emptyMsg: 'No orders ready yet',
+    },
+    {
+      key: 'completed',
+      label: 'Completed',
+      subtitle: 'Successfully served',
+      cls: 'col-completed',
+      badgeCls: 'completed',
+      icon: '🏁',
+      orders: completedOrders,
+      emptyMsg: 'No completed orders',
+    },
+  ];
 
   return (
     <div className="app-container">
+      {/* ── Header ─────────────────────────────────────────────── */}
       <header className="header">
-    <h1>OrderTracker</h1>
+        <div className="header-logo">
+          <div className="logo-icon">
+            <UtensilsCrossed size={18} color="white" />
+          </div>
+          <h1>OrderTracker</h1>
+        </div>
+
+        <div className="header-divider" />
+
+        {/* Search */}
         <div className="search-container">
-          <input 
-            type="text" 
-            placeholder="Search orders..." 
-            className="form-control search-input"
+          <Search size={15} className="search-icon-inner" />
+          <input
+            type="text"
+            placeholder="Search orders…"
+            className="search-input"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={e => setSearchTerm(e.target.value)}
           />
         </div>
-        
+
+        {/* Category filters */}
         <div className="dashboard-filters">
           {['All', 'Veg', 'Non-Veg'].map(cat => (
             <button
@@ -86,63 +127,69 @@ function App() {
               className={`cat-btn ${filterCategory === cat ? 'active' : ''}`}
               onClick={() => setFilterCategory(cat)}
             >
+              {cat === 'Veg' && <span className="veg-dot" />}
+              {cat === 'Non-Veg' && <span className="non-veg-dot" />}
               {cat}
             </button>
           ))}
         </div>
+
         <button className="btn" onClick={() => setIsFormOpen(true)}>
-          <PlusCircle size={20} /> New Order
+          <PlusCircle size={18} />
+          New Order
         </button>
       </header>
 
+      {/* ── Board ──────────────────────────────────────────────── */}
       {loading ? (
-        <div style={{ textAlign: 'center', marginTop: '4rem', color: 'var(--text-muted)' }}>
-          Loading orders...
+        <div className="loading-state">
+          <div className="spinner" />
+          <span>Loading orders…</span>
         </div>
       ) : (
         <div className="dashboard-grid">
-          {/* Preparing Column */}
-          <div className="status-column">
-            <div className="column-header">
-              <h2>Preparing</h2>
-              <span className="badge preparing">{preparingOrders.length}</span>
-            </div>
-            {preparingOrders.map(order => (
-              <OrderCard key={order.id} order={order} onUpdateStatus={handleUpdateStatus} />
-            ))}
-            {preparingOrders.length === 0 && <div style={{ color: 'var(--text-muted)' }}>No orders preparing.</div>}
-          </div>
+          {columns.map(col => (
+            <div key={col.key} className={`status-column ${col.cls}`}>
+              {/* Column header */}
+              <div className="column-header">
+                <div className="column-icon">
+                  <span style={{ fontSize: '1.1rem' }}>{col.icon}</span>
+                </div>
+                <div className="column-title-group">
+                  <h2>{col.label}</h2>
+                  <div className="column-subtitle">{col.subtitle}</div>
+                </div>
+                <span className={`badge ${col.badgeCls}`}>{col.orders.length}</span>
+              </div>
 
-          {/* Ready Column */}
-          <div className="status-column">
-            <div className="column-header">
-              <h2>Ready</h2>
-              <span className="badge ready">{readyOrders.length}</span>
-            </div>
-            {readyOrders.map(order => (
-              <OrderCard key={order.id} order={order} onUpdateStatus={handleUpdateStatus} />
-            ))}
-            {readyOrders.length === 0 && <div style={{ color: 'var(--text-muted)' }}>No orders ready.</div>}
-          </div>
+              {/* Cards */}
+              {col.orders.map(order => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  onUpdateStatus={handleUpdateStatus}
+                />
+              ))}
 
-          {/* Completed Column */}
-          <div className="status-column">
-            <div className="column-header">
-              <h2>Completed</h2>
-              <span className="badge completed">{completedOrders.length}</span>
+              {/* Empty state */}
+              {col.orders.length === 0 && (
+                <div className="empty-state">
+                  <div className="empty-icon">
+                    <span style={{ fontSize: '1.25rem' }}>{col.icon}</span>
+                  </div>
+                  <p>{col.emptyMsg}</p>
+                </div>
+              )}
             </div>
-            {completedOrders.map(order => (
-              <OrderCard key={order.id} order={order} onUpdateStatus={handleUpdateStatus} />
-            ))}
-            {completedOrders.length === 0 && <div style={{ color: 'var(--text-muted)' }}>No completed orders.</div>}
-          </div>
+          ))}
         </div>
       )}
 
+      {/* ── Modal ──────────────────────────────────────────────── */}
       {isFormOpen && (
-        <OrderForm 
-          onSubmit={handleCreateOrder} 
-          onClose={() => setIsFormOpen(false)} 
+        <OrderForm
+          onSubmit={handleCreateOrder}
+          onClose={() => setIsFormOpen(false)}
         />
       )}
     </div>
